@@ -1,7 +1,7 @@
 import type { TrackType } from "@/timeline";
 
 export const TIMELINE_TRACK_HEIGHTS_PX: Record<TrackType, number> = {
-	video: 65,
+	video: 82,
 	text: 25,
 	audio: 50,
 	graphic: 25,

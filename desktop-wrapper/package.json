@@ -1,0 +1,61 @@
+{
+  "name": "opencut-classic-desktop",
+  "version": "0.1.6",
+  "private": true,
+  "author": "OpenCut Desktop Build",
+  "description": "Standalone Windows desktop package for OpenCut Classic",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "prepare:web": "node prepare-web.cjs && node sync-runtime-deps.cjs",
+    "pack": "npm run prepare:web && electron-builder --dir --win --x64",
+    "dist": "npm run prepare:web && electron-builder --win nsis portable --x64"
+  },
+  "devDependencies": {
+    "electron": "latest",
+    "electron-builder": "latest"
+  },
+  "build": {
+    "appId": "app.opencut.classic.desktop",
+    "productName": "OpenCut Classic",
+    "asar": true,
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "web",
+        "to": "web"
+      }
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "icon": "icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "OpenCut Classic"
+    }
+  }
+}

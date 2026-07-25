@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+
 import type {
 	ParamDefinition,
 	NumberParamDefinition,
@@ -138,10 +140,10 @@ function ParamInput({
 
 	if (param.type === "text") {
 		return (
-			<Textarea
+			<TextParamField
 				value={String(value)}
-				onChange={(event) => onPreview(event.currentTarget.value)}
-				onBlur={onCommit}
+				onPreview={onPreview}
+				onCommit={onCommit}
 			/>
 		);
 	}
@@ -158,6 +160,53 @@ function ParamInput({
 	}
 
 	return null;
+}
+
+function TextParamField({
+	value,
+	onPreview,
+	onCommit,
+}: {
+	value: string;
+	onPreview: (value: string) => void;
+	onCommit: () => void;
+}) {
+	const [draftValue, setDraftValue] = useState(value);
+	const draftValueRef = useRef(value);
+	const isEditingRef = useRef(false);
+
+	// Preview updates are intentionally not written back to the committed
+	// element until blur. Keep a local draft while the textarea is focused so a
+	// parent render cannot replace each newly typed character with the old
+	// committed value. This is especially important for IME composition.
+	useEffect(() => {
+		if (!isEditingRef.current) {
+			draftValueRef.current = value;
+			setDraftValue(value);
+		}
+	}, [value]);
+
+	return (
+		<Textarea
+			value={draftValue}
+			onFocus={() => {
+				isEditingRef.current = true;
+			}}
+			onChange={(event) => {
+				const nextValue = event.currentTarget.value;
+				draftValueRef.current = nextValue;
+				setDraftValue(nextValue);
+				onPreview(nextValue);
+			}}
+			onBlur={() => {
+				// Re-preview the final draft before committing in case the browser's
+				// final composition update and blur happen in the same event turn.
+				onPreview(draftValueRef.current);
+				onCommit();
+				isEditingRef.current = false;
+			}}
+		/>
+	);
 }
 
 function NumberParamField({

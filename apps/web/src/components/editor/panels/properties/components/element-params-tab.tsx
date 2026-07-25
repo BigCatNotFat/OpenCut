@@ -88,8 +88,8 @@ function ElementParamField({
 		localTime,
 		isPlayheadWithinElementRange,
 		resolvedValue,
-		buildBaseUpdates: ({ value }) =>
-			writeElementParamValue({ element, param, value }),
+		buildBaseUpdates: ({ value, currentElement }) =>
+			writeElementParamValue({ element: currentElement, param, value }),
 	});
 
 	return (

@@ -997,8 +997,10 @@ function AudioElementContent({
 			? (mediaAssets.find((asset) => asset.id === element.mediaId) ?? null)
 			: null;
 
-	const audioBuffer =
-		element.sourceType === "library" ? element.buffer : undefined;
+	// Upload audio elements can already carry a decoded buffer when they are
+	// first inserted. Prefer it for every source type so the waveform can render
+	// immediately without decoding the same file again.
+	const audioBuffer = element.buffer;
 	const audioUrl =
 		element.sourceType === "library" ? element.sourceUrl : mediaAsset?.url;
 	const sourceFile =
@@ -1089,12 +1091,28 @@ function TiledMediaContent({
 	track: TimelineTrack;
 }) {
 	const mediaAssets = useEditor((e) => e.media.getAssets());
+	const pixelsPerSecond = useContext(PixelsPerSecondContext);
 
 	const mediaAsset = mediaAssets.find((asset) => asset.id === element.mediaId);
+	const waveformGainSamples = useMemo(
+		() =>
+			element.type === "video"
+				? buildWaveformGainSamples({
+						element,
+						count: WAVEFORM_GAIN_SAMPLE_COUNT,
+					})
+				: undefined,
+		[element],
+	);
 	const imageUrl =
 		element.type === "video"
 			? mediaAsset?.thumbnailUrl
 			: (mediaAsset?.thumbnailUrl ?? mediaAsset?.url);
+	const showEmbeddedAudioWaveform =
+		element.type === "video" &&
+		element.isSourceAudioEnabled !== false &&
+		mediaAsset?.hasAudio !== false &&
+		pixelsPerSecond !== null;
 
 	if (!imageUrl) {
 		return (
@@ -1105,21 +1123,42 @@ function TiledMediaContent({
 	}
 
 	const trackHeight = getTrackHeight({ type: track.type });
-	const tileWidth = trackHeight * THUMBNAIL_ASPECT_RATIO;
+	const embeddedAudioHeight = showEmbeddedAudioWaveform ? 24 : 0;
+	const visualHeight = Math.max(1, trackHeight - embeddedAudioHeight);
+	const tileWidth = visualHeight * THUMBNAIL_ASPECT_RATIO;
 
 	return (
 		<>
 			<div
-				className="absolute inset-0"
+				className="absolute inset-x-0 top-0"
 				style={{
+					height: `${visualHeight}px`,
 					backgroundColor: "var(--muted)",
 					backgroundImage: `url(${imageUrl})`,
 					backgroundRepeat: "repeat-x",
-					backgroundSize: `${tileWidth}px ${trackHeight}px`,
+					backgroundSize: `${tileWidth}px ${visualHeight}px`,
 					backgroundPosition: "left center",
 					pointerEvents: "none",
 				}}
 			/>
+			{showEmbeddedAudioWaveform && mediaAsset && pixelsPerSecond !== null && (
+				<div className="absolute inset-x-0 bottom-0 h-6 overflow-hidden border-t border-cyan-300/35 bg-cyan-950/90">
+					<AudioWaveform
+						sourceKey={buildWaveformSourceKey({
+							kind: "media",
+							id: element.mediaId,
+						})}
+						sourceFile={mediaAsset.file}
+						gainSamples={waveformGainSamples}
+						pixelsPerSecond={pixelsPerSecond}
+						clipDurationSec={element.duration / TICKS_PER_SECOND}
+						retime={element.retime}
+						sourceStartSec={element.trimStart / TICKS_PER_SECOND}
+						color="rgba(34, 211, 238, 0.95)"
+						className="px-px"
+					/>
+				</div>
+			)}
 			<MediaElementHeader
 				name={mediaAsset?.name}
 				leading={

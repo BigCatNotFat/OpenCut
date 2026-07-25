@@ -5,6 +5,7 @@ import type { RetimeConfig } from "@/timeline";
 
 const RMS_ANALYSIS_WINDOW_SECONDS = 0.02;
 const DEFAULT_SOURCE_WAVEFORM_BUCKET_SIZE = 128;
+const STREAMING_SOURCE_WAVEFORM_BUCKET_SIZE = 256;
 
 function computePeakBuckets({
 	buffer,
@@ -80,6 +81,85 @@ export function buildSourceWaveformSummary({
 		sourceKey,
 		sampleRate: buffer.sampleRate,
 		totalSamples: buffer.length,
+		bucketSize: safeBucketSize,
+		amplitudes: Float32Array.from(amplitudes),
+	};
+}
+
+/**
+ * Builds a compact waveform summary from decoded audio chunks without ever
+ * joining the full source into one AudioBuffer. This is important for long
+ * recordings and multi-gigabyte video files, where reading or decoding the
+ * entire source into memory would otherwise fail.
+ */
+export async function buildStreamingSourceWaveformSummary({
+	sourceKey,
+	buffers,
+	bucketSize = STREAMING_SOURCE_WAVEFORM_BUCKET_SIZE,
+}: {
+	sourceKey: string;
+	buffers: AsyncIterable<AudioBuffer>;
+	bucketSize?: number;
+}): Promise<SourceWaveformSummary> {
+	const safeBucketSize = Math.max(1, Math.floor(bucketSize));
+	const amplitudes: number[] = [];
+	let sampleRate: number | null = null;
+	let totalSamples = 0;
+	let samplesInBucket = 0;
+	let bucketPeak = 0;
+
+	for await (const buffer of buffers) {
+		if (buffer.length <= 0 || buffer.numberOfChannels <= 0) continue;
+
+		if (sampleRate === null) {
+			sampleRate = buffer.sampleRate;
+		} else if (buffer.sampleRate !== sampleRate) {
+			throw new Error(
+				`Waveform source sample rate changed from ${sampleRate} to ${buffer.sampleRate}`,
+			);
+		}
+
+		const channels = Array.from(
+			{ length: buffer.numberOfChannels },
+			(_, channel) => buffer.getChannelData(channel),
+		);
+		let chunkOffset = 0;
+
+		while (chunkOffset < buffer.length) {
+			const samplesToTake = Math.min(
+				safeBucketSize - samplesInBucket,
+				buffer.length - chunkOffset,
+			);
+			const chunkEnd = chunkOffset + samplesToTake;
+
+			for (const channelData of channels) {
+				for (let sample = chunkOffset; sample < chunkEnd; sample++) {
+					const amplitude = Math.abs(channelData[sample] ?? 0);
+					if (amplitude > bucketPeak) bucketPeak = amplitude;
+				}
+			}
+
+			chunkOffset = chunkEnd;
+			samplesInBucket += samplesToTake;
+			totalSamples += samplesToTake;
+
+			if (samplesInBucket === safeBucketSize) {
+				amplitudes.push(bucketPeak);
+				samplesInBucket = 0;
+				bucketPeak = 0;
+			}
+		}
+	}
+
+	if (samplesInBucket > 0) amplitudes.push(bucketPeak);
+	if (sampleRate === null || totalSamples <= 0) {
+		throw new Error("The audio track did not produce any waveform samples");
+	}
+
+	return {
+		sourceKey,
+		sampleRate,
+		totalSamples,
 		bucketSize: safeBucketSize,
 		amplitudes: Float32Array.from(amplitudes),
 	};

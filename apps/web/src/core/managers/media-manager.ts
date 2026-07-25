@@ -103,9 +103,8 @@ export class MediaManager {
 	}
 
 	async clearProjectMedia({ projectId }: { projectId: string }): Promise<void> {
-		waveformCache.clearAll();
-
 		this.assets.forEach((asset) => {
+			waveformCache.clearSource({ sourceKey: `media:${asset.id}` });
 			if (asset.url) {
 				URL.revokeObjectURL(asset.url);
 			}

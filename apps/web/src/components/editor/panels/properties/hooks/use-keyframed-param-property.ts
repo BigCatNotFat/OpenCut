@@ -49,8 +49,10 @@ export function useKeyframedParamProperty({
 	resolvedValue: number | string | boolean;
 	buildBaseUpdates: ({
 		value,
+		currentElement,
 	}: {
 		value: number | string | boolean;
+		currentElement: TimelineElement;
 	}) => Partial<TimelineElement>;
 }): KeyframedParamPropertyResult {
 	const editor = useEditor();
@@ -99,12 +101,17 @@ export function useKeyframedParamProperty({
 			return;
 		}
 
+		const currentElement = editor.timeline.getElementsWithTracks({
+			elements: [{ trackId, elementId }],
+		})[0]?.element;
+		if (!currentElement) return;
+
 		editor.timeline.previewElements({
 			updates: [
 				{
 					trackId,
 					elementId,
-					updates: buildBaseUpdates({ value }),
+					updates: buildBaseUpdates({ value, currentElement }),
 				},
 			],
 		});

@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import {
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
 import { useCommittedRef } from "@/hooks/use-committed-ref";
 import { useResizeObserver } from "@/hooks/use-resize-observer";
 import { TIMELINE_AUDIO_WAVEFORM_COLOR } from "./theme";
@@ -70,6 +76,9 @@ export function AudioWaveform({
 	burnColor = WAVEFORM_BURN_COLOR,
 	className = "",
 }: AudioWaveformProps) {
+	const [status, setStatus] = useState<"loading" | "ready" | "error">(
+		"loading",
+	);
 	const canvasRef = useRef<HTMLCanvasElement>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
 	const summaryRef = useRef<SourceWaveformSummary | null>(null);
@@ -271,6 +280,7 @@ export function AudioWaveform({
 
 	useEffect(() => {
 		let isCancelled = false;
+		setStatus("loading");
 		summaryRef.current = null;
 		clearCanvas();
 
@@ -286,12 +296,16 @@ export function AudioWaveform({
 					return;
 				}
 				summaryRef.current = summary;
+				setStatus("ready");
 				drawVisible();
 			})
-			.catch(() => {
+			.catch((error) => {
 				// Waveform loading failed (e.g. corrupt file, unsupported format).
-				// Fail silently — a missing waveform is preferable to an error state.
+				// Keep editing available, but retain diagnostics for formats that need
+				// another decoder path in the future.
+				console.warn(`Failed to render waveform for ${sourceKey}:`, error);
 				if (!isCancelled) {
+					setStatus("error");
 					clearCanvas();
 				}
 			});
@@ -345,7 +359,23 @@ export function AudioWaveform({
 
 	return (
 		<div ref={containerRef} className={cn("relative size-full", className)}>
-			<canvas ref={canvasRef} className="absolute bottom-0" />
+			{status === "loading" && (
+				<div className="text-foreground/55 pointer-events-none absolute inset-0 flex items-center justify-center text-[0.55rem] animate-pulse">
+					Analyzing waveform...
+				</div>
+			)}
+			{status === "error" && (
+				<div className="text-foreground/45 pointer-events-none absolute inset-0 flex items-center justify-center text-[0.55rem]">
+					Waveform unavailable
+				</div>
+			)}
+			<canvas
+				ref={canvasRef}
+				className={cn(
+					"absolute bottom-0 transition-opacity",
+					status === "ready" ? "opacity-100" : "opacity-0",
+				)}
+			/>
 		</div>
 	);
 }

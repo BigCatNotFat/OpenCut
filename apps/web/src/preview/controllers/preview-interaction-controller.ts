@@ -488,6 +488,14 @@ export class PreviewInteractionController {
 			selectedElements: pending.selectedElements,
 			dragTarget,
 		});
+
+		// A property field may still have an active preview when the user starts
+		// dragging the element directly on the canvas. Commit that preview before
+		// taking drag snapshots, otherwise the drag can capture stale params (for
+		// example the previous text content) and write them back with the new
+		// position.
+		this.deps.timeline.commitPreview();
+
 		const draggableElements = toDragElementSnapshots({
 			elementsWithTracks: this.deps.timeline.getElementsWithTracks({
 				elements: dragSelection,
