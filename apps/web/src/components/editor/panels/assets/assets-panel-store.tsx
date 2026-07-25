@@ -97,6 +97,8 @@ interface AssetsPanelStore {
 	previewMediaId: string | null;
 	openMediaPreview: (mediaId: string) => void;
 	closeMediaPreview: () => void;
+	sourcePlaybackRate: number;
+	setSourcePlaybackRate: (rate: number) => void;
 }
 
 export const useAssetsPanelStore = create<AssetsPanelStore>()(
@@ -117,6 +119,9 @@ export const useAssetsPanelStore = create<AssetsPanelStore>()(
 			previewMediaId: null,
 			openMediaPreview: (mediaId) => set({ previewMediaId: mediaId }),
 			closeMediaPreview: () => set({ previewMediaId: null }),
+			sourcePlaybackRate: 1,
+			setSourcePlaybackRate: (rate) =>
+				set({ sourcePlaybackRate: Math.max(0.25, Math.min(4, rate)) }),
 		}),
 		{
 			name: "assets-panel",
@@ -124,6 +129,7 @@ export const useAssetsPanelStore = create<AssetsPanelStore>()(
 				mediaViewMode: state.mediaViewMode,
 				mediaSortBy: state.mediaSortBy,
 				mediaSortOrder: state.mediaSortOrder,
+				sourcePlaybackRate: state.sourcePlaybackRate,
 			}),
 		},
 	),
