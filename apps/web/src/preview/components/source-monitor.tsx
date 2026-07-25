@@ -4,12 +4,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	BetweenHorizontalEnd,
 	BetweenHorizontalStart,
+	Infinity,
 	ListPlus,
 	Maximize2,
 	Pause,
 	Play,
 	Plus,
 	RotateCcw,
+	ScanLine,
 	Trash2,
 	X,
 } from "lucide-react";
@@ -40,6 +42,8 @@ interface SourceSelection {
 	inPoint: number;
 	outPoint: number;
 }
+
+type PlaybackScope = "continuous" | "selection";
 
 function formatTime(seconds: number): string {
 	if (!Number.isFinite(seconds) || seconds < 0) return "00:00.00";
@@ -98,6 +102,8 @@ export function SourceMonitor({
 	const [inPoint, setInPoint] = useState(0);
 	const [outPoint, setOutPoint] = useState(asset?.duration ?? 0);
 	const [isPlaying, setIsPlaying] = useState(false);
+	const [playbackScope, setPlaybackScope] =
+		useState<PlaybackScope>("continuous");
 	const [selections, setSelections] = useState<SourceSelection[]>([]);
 	const [activeSelectionId, setActiveSelectionId] = useState<string | null>(
 		null,
@@ -115,6 +121,7 @@ export function SourceMonitor({
 		setInPoint(0);
 		setOutPoint(nextDuration);
 		setIsPlaying(false);
+		setPlaybackScope("continuous");
 		setSelections([]);
 		setActiveSelectionId(null);
 	}, [asset?.id, asset?.duration, closeMediaPreview]);
@@ -148,6 +155,10 @@ export function SourceMonitor({
 	const selectedDuration = Math.max(outPoint - inPoint, 0);
 	const inPercent = safeDuration > 0 ? (inPoint / safeDuration) * 100 : 0;
 	const outPercent = safeDuration > 0 ? (outPoint / safeDuration) * 100 : 100;
+	const markerPosition = (seconds: number) => {
+		if (safeDuration <= 0) return 0;
+		return Math.min(99.25, Math.max(0.75, (seconds / safeDuration) * 100));
+	};
 	const sortedSelections = useMemo(
 		() => [...selections].sort((a, b) => a.inPoint - b.inPoint),
 		[selections],
@@ -188,7 +199,11 @@ export function SourceMonitor({
 			},
 			onTimeUpdate: (event: React.SyntheticEvent<HTMLMediaElement>) => {
 				const media = event.currentTarget;
-				if (!media.paused && media.currentTime >= outPoint) {
+				if (
+					playbackScope === "selection" &&
+					!media.paused &&
+					media.currentTime >= outPoint
+				) {
 					media.pause();
 					media.currentTime = outPoint;
 					setIsPlaying(false);
@@ -230,7 +245,7 @@ export function SourceMonitor({
 				/>
 			</div>
 		);
-	}, [asset, sourceUrl, outPoint, playbackRate]);
+	}, [asset, sourceUrl, outPoint, playbackRate, playbackScope]);
 
 	if (!asset) return null;
 
@@ -253,6 +268,7 @@ export function SourceMonitor({
 		if (!media) return;
 		setInPoint(start);
 		setOutPoint(end);
+		setPlaybackScope("selection");
 		setActiveSelectionId(selectionId);
 		media.currentTime = start;
 		media.playbackRate = playbackRate;
@@ -271,9 +287,18 @@ export function SourceMonitor({
 			media.pause();
 			return;
 		}
-		if (media.currentTime < inPoint || media.currentTime >= outPoint) {
+		if (
+			playbackScope === "selection" &&
+			(media.currentTime < inPoint || media.currentTime >= outPoint)
+		) {
 			media.currentTime = inPoint;
 			setCurrentTime(inPoint);
+		} else if (
+			playbackScope === "continuous" &&
+			(media.ended || media.currentTime >= safeDuration - MIN_SELECTION_SECONDS)
+		) {
+			media.currentTime = 0;
+			setCurrentTime(0);
 		}
 		media.playbackRate = playbackRate;
 		try {
@@ -450,7 +475,13 @@ export function SourceMonitor({
 									size="icon"
 									className="size-7 shrink-0"
 									onClick={togglePlayback}
-									title={isPlaying ? "暂停" : "播放选区"}
+									title={
+										isPlaying
+											? "暂停"
+											: playbackScope === "selection"
+												? "播放当前选区"
+												: "从当前位置连续播放"
+									}
 								>
 									{isPlaying ? (
 										<Pause className="size-3.5" />
@@ -458,6 +489,38 @@ export function SourceMonitor({
 										<Play className="size-3.5" />
 									)}
 								</Button>
+
+								<CompactTool
+									label={
+										playbackScope === "continuous"
+											? "连续播放：经过出点后继续播放"
+											: "选区播放：到达出点后暂停"
+									}
+								>
+									<Button
+										variant={
+											playbackScope === "continuous" ? "secondary" : "ghost"
+										}
+										size="icon"
+										className="size-7 shrink-0"
+										onClick={() =>
+											setPlaybackScope((scope) =>
+												scope === "continuous" ? "selection" : "continuous",
+											)
+										}
+										aria-label={
+											playbackScope === "continuous"
+												? "切换为选区播放"
+												: "切换为连续播放"
+										}
+									>
+										{playbackScope === "continuous" ? (
+											<Infinity className="size-3.5" />
+										) : (
+											<ScanLine className="size-3.5" />
+										)}
+									</Button>
+								</CompactTool>
 
 								<span className="w-[68px] shrink-0 text-right font-mono text-[11px] tabular-nums">
 									{formatTime(currentTime)}
@@ -471,11 +534,32 @@ export function SourceMonitor({
 											((selection.outPoint - selection.inPoint) / safeDuration) *
 											100;
 										return (
-											<div
-												key={selection.id}
-												className="absolute top-1/2 h-2 -translate-y-1/2 rounded bg-emerald-500/65"
-												style={{ left: `${left}%`, width: `${width}%` }}
-											/>
+											<div key={selection.id}>
+												<div
+													className="absolute top-1/2 h-2 -translate-y-1/2 rounded bg-emerald-500/65"
+													style={{ left: `${left}%`, width: `${width}%` }}
+												/>
+												<button
+													type="button"
+													className="absolute top-0 z-20 h-full w-2 -translate-x-1/2"
+													style={{ left: `${markerPosition(selection.inPoint)}%` }}
+													onClick={() => seekTo(selection.inPoint)}
+													title={`片段 ${sortedSelections.indexOf(selection) + 1} 入点 ${formatTime(selection.inPoint)}`}
+													aria-label={`跳转到片段 ${sortedSelections.indexOf(selection) + 1} 入点`}
+												>
+													<span className="mx-auto block h-full w-px bg-emerald-400/75 shadow-[0_0_3px_rgba(52,211,153,0.9)] transition-[width] hover:w-0.5" />
+												</button>
+												<button
+													type="button"
+													className="absolute top-0 z-20 h-full w-2 -translate-x-1/2"
+													style={{ left: `${markerPosition(selection.outPoint)}%` }}
+													onClick={() => seekTo(selection.outPoint)}
+													title={`片段 ${sortedSelections.indexOf(selection) + 1} 出点 ${formatTime(selection.outPoint)}`}
+													aria-label={`跳转到片段 ${sortedSelections.indexOf(selection) + 1} 出点`}
+												>
+													<span className="mx-auto block h-full w-px bg-red-400/75 shadow-[0_0_3px_rgba(248,113,113,0.9)] transition-[width] hover:w-0.5" />
+												</button>
+											</div>
 										);
 									})}
 									<div
@@ -485,6 +569,26 @@ export function SourceMonitor({
 											width: `${Math.max(0, outPercent - inPercent)}%`,
 										}}
 									/>
+									<button
+										type="button"
+										className="absolute -top-1 z-30 h-7 w-3 -translate-x-1/2"
+										style={{ left: `${markerPosition(inPoint)}%` }}
+										onClick={() => seekTo(inPoint)}
+										title={`跳转到入点 ${formatTime(inPoint)}`}
+										aria-label="跳转到当前入点"
+									>
+										<span className="mx-auto block h-full w-0.5 bg-emerald-400 shadow-[0_0_5px_rgba(52,211,153,1)] transition-[width] hover:w-1" />
+									</button>
+									<button
+										type="button"
+										className="absolute -top-1 z-30 h-7 w-3 -translate-x-1/2"
+										style={{ left: `${markerPosition(outPoint)}%` }}
+										onClick={() => seekTo(outPoint)}
+										title={`跳转到出点 ${formatTime(outPoint)}`}
+										aria-label="跳转到当前出点"
+									>
+										<span className="mx-auto block h-full w-0.5 bg-red-400 shadow-[0_0_5px_rgba(248,113,113,1)] transition-[width] hover:w-1" />
+									</button>
 									<input
 										type="range"
 										min={0}
