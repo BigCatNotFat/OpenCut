@@ -94,6 +94,9 @@ interface AssetsPanelStore {
 	mediaSortBy: MediaSortKey;
 	mediaSortOrder: MediaSortOrder;
 	setMediaSort: (args: { key: MediaSortKey; order: MediaSortOrder }) => void;
+	previewMediaId: string | null;
+	openMediaPreview: (mediaId: string) => void;
+	closeMediaPreview: () => void;
 }
 
 export const useAssetsPanelStore = create<AssetsPanelStore>()(
@@ -111,6 +114,9 @@ export const useAssetsPanelStore = create<AssetsPanelStore>()(
 			mediaSortOrder: "asc",
 			setMediaSort: ({ key, order }) =>
 				set({ mediaSortBy: key, mediaSortOrder: order }),
+			previewMediaId: null,
+			openMediaPreview: (mediaId) => set({ previewMediaId: mediaId }),
+			closeMediaPreview: () => set({ previewMediaId: null }),
 		}),
 		{
 			name: "assets-panel",

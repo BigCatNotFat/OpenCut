@@ -58,7 +58,6 @@ import {
 	Video01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
-import { MediaPreviewDialog } from "@/components/editor/panels/assets/media-preview-dialog";
 
 export function MediaView() {
 	const editor = useEditor();
@@ -73,11 +72,11 @@ export function MediaView() {
 		mediaSortBy,
 		mediaSortOrder,
 		setMediaSort,
+		openMediaPreview,
 	} = useAssetsPanelStore();
 
 	const [isProcessing, setIsProcessing] = useState(false);
 	const [progress, setProgress] = useState(0);
-	const [previewAsset, setPreviewAsset] = useState<MediaAsset | null>(null);
 
 	const processFiles = async ({ files }: { files: File[] }) => {
 		if (!files || files.length === 0) return;
@@ -192,13 +191,6 @@ export function MediaView() {
 	return (
 		<>
 			<input {...fileInputProps} />
-			<MediaPreviewDialog
-				asset={previewAsset}
-				onOpenChange={(open) => {
-					if (!open) setPreviewAsset(null);
-				}}
-			/>
-
 			<PanelView
 				title="Assets"
 				actions={
@@ -235,7 +227,10 @@ export function MediaView() {
 							items={filteredMediaItems}
 							mode={mediaViewMode}
 							onRemove={handleRemove}
-							onPreview={setPreviewAsset}
+							onPreview={(item) => {
+								editor.playback.pause();
+								openMediaPreview(item.id);
+							}}
 						/>
 					</SelectableSurface>
 				)}

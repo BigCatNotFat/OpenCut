@@ -23,6 +23,8 @@ import {
 	PreviewViewportProvider,
 	usePreviewViewportState,
 } from "./preview-viewport";
+import { useAssetsPanelStore } from "@/components/editor/panels/assets/assets-panel-store";
+import { SourceMonitor } from "./source-monitor";
 
 function usePreviewSize() {
 	const canvasSize = useEditor(
@@ -69,6 +71,7 @@ export function PreviewPanel({
 }) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [container, setContainer] = useState<HTMLDivElement | null>(null);
+	const previewMediaId = useAssetsPanelStore((state) => state.previewMediaId);
 	const { toggleFullscreen } = useFullscreen({ containerRef });
 	const handleContainerRef = useCallback((node: HTMLDivElement | null) => {
 		containerRef.current = node;
@@ -80,14 +83,20 @@ export function PreviewPanel({
 			ref={handleContainerRef}
 			className="panel bg-background relative flex size-full min-h-0 min-w-0 flex-col rounded-sm border"
 		>
-			<PreviewCanvas
-				container={container}
-				onToggleFullscreen={toggleFullscreen}
-				overlayControls={overlayControls}
-				overlayInstances={overlayInstances}
-				onOverlayVisibilityChange={onOverlayVisibilityChange}
-			/>
-			<RenderTreeController />
+			{previewMediaId ? (
+				<SourceMonitor onToggleFullscreen={toggleFullscreen} />
+			) : (
+				<>
+					<PreviewCanvas
+						container={container}
+						onToggleFullscreen={toggleFullscreen}
+						overlayControls={overlayControls}
+						overlayInstances={overlayInstances}
+						onOverlayVisibilityChange={onOverlayVisibilityChange}
+					/>
+					<RenderTreeController />
+				</>
+			)}
 		</div>
 	);
 }
