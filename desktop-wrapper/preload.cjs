@@ -265,6 +265,9 @@ const TRANSLATIONS = Object.freeze({
   "Sticker categories": "贴纸分类",
   "Failed to add sticker to timeline": "贴纸添加到时间轴失败",
   "Add to timeline": "添加到时间轴",
+  "Preview asset": "预览素材",
+  "Double-click to preview": "双击预览素材",
+  "Unable to preview this file": "无法预览此文件",
 
   "Show only commercially licensed": "仅显示可商用内容",
   "Loading sounds...": "正在加载音效……",

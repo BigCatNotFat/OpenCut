@@ -29,6 +29,7 @@ export interface DraggableItemProps {
 	isRounded?: boolean;
 	variant?: "card" | "compact";
 	isDraggable?: boolean;
+	onPreview?: () => void;
 }
 
 export function DraggableItem({
@@ -45,6 +46,7 @@ export function DraggableItem({
 	isRounded = true,
 	variant = "card",
 	isDraggable = true,
+	onPreview,
 }: DraggableItemProps) {
 	const [isDragging, setIsDragging] = useState(false);
 	const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
@@ -115,6 +117,12 @@ export function DraggableItem({
 							draggable={isDraggable}
 							onDragStart={isDraggable ? handleDragStart : undefined}
 							onDragEnd={isDraggable ? handleDragEnd : undefined}
+							onDoubleClick={(event) => {
+								event.preventDefault();
+								event.stopPropagation();
+								onPreview?.();
+							}}
+							title={onPreview ? "Double-click to preview" : undefined}
 						>
 							{preview}
 							{!isDragging && (
@@ -154,6 +162,12 @@ export function DraggableItem({
 						draggable={isDraggable}
 						onDragStart={isDraggable ? handleDragStart : undefined}
 						onDragEnd={isDraggable ? handleDragEnd : undefined}
+						onDoubleClick={(event) => {
+							event.preventDefault();
+							event.stopPropagation();
+							onPreview?.();
+						}}
+						title={onPreview ? "Double-click to preview" : undefined}
 					>
 						<div className="size-6 shrink-0 overflow-hidden rounded-sm">
 							{preview}

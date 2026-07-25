@@ -58,6 +58,7 @@ import {
 	Video01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
+import { MediaPreviewDialog } from "@/components/editor/panels/assets/media-preview-dialog";
 
 export function MediaView() {
 	const editor = useEditor();
@@ -76,6 +77,7 @@ export function MediaView() {
 
 	const [isProcessing, setIsProcessing] = useState(false);
 	const [progress, setProgress] = useState(0);
+	const [previewAsset, setPreviewAsset] = useState<MediaAsset | null>(null);
 
 	const processFiles = async ({ files }: { files: File[] }) => {
 		if (!files || files.length === 0) return;
@@ -190,6 +192,12 @@ export function MediaView() {
 	return (
 		<>
 			<input {...fileInputProps} />
+			<MediaPreviewDialog
+				asset={previewAsset}
+				onOpenChange={(open) => {
+					if (!open) setPreviewAsset(null);
+				}}
+			/>
 
 			<PanelView
 				title="Assets"
@@ -227,6 +235,7 @@ export function MediaView() {
 							items={filteredMediaItems}
 							mode={mediaViewMode}
 							onRemove={handleRemove}
+							onPreview={setPreviewAsset}
 						/>
 					</SelectableSurface>
 				)}
@@ -245,11 +254,13 @@ function MediaAssetDraggable({
 	preview,
 	variant,
 	isRounded,
+	onPreview,
 }: {
 	item: MediaAsset;
 	preview: React.ReactNode;
 	variant: "card" | "compact";
 	isRounded?: boolean;
+	onPreview: () => void;
 }) {
 	const editor = useEditor();
 
@@ -296,6 +307,7 @@ function MediaAssetDraggable({
 			}
 			variant={variant}
 			isRounded={isRounded}
+			onPreview={onPreview}
 		/>
 	);
 }
@@ -304,6 +316,7 @@ function MediaItemWithContextMenu({
 	item,
 	children,
 	onRemove,
+	onPreview,
 }: {
 	item: MediaAsset;
 	children: React.ReactNode;
@@ -314,6 +327,7 @@ function MediaItemWithContextMenu({
 		event: React.MouseEvent;
 		ids: string[];
 	}) => void;
+	onPreview: () => void;
 }) {
 	const { isSelected, selectedIds } = useSelection();
 	const idsToDelete = isSelected(item.id) ? selectedIds : [item.id];
@@ -324,6 +338,7 @@ function MediaItemWithContextMenu({
 		<ContextMenu>
 			<ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
 			<ContextMenuContent>
+				<ContextMenuItem onClick={onPreview}>Preview asset</ContextMenuItem>
 				<ContextMenuItem>Export clips</ContextMenuItem>
 				<ContextMenuItem
 					variant="destructive"
@@ -342,6 +357,7 @@ function MediaItemList({
 	items,
 	mode,
 	onRemove,
+	onPreview,
 }: {
 	items: MediaAsset[];
 	mode: MediaViewMode;
@@ -352,6 +368,7 @@ function MediaItemList({
 		event: React.MouseEvent;
 		ids: string[];
 	}) => void;
+	onPreview: (item: MediaAsset) => void;
 }) {
 	const isGrid = mode === "grid";
 
@@ -363,7 +380,12 @@ function MediaItemList({
 			}
 		>
 			{items.map((item) => (
-				<MediaItemWithContextMenu item={item} onRemove={onRemove} key={item.id}>
+				<MediaItemWithContextMenu
+					item={item}
+					onRemove={onRemove}
+					onPreview={() => onPreview(item)}
+					key={item.id}
+				>
 					<SelectableItem className={cn(!isGrid && "w-full")} id={item.id}>
 						<MediaAssetDraggable
 							item={item}
@@ -375,6 +397,7 @@ function MediaItemList({
 							}
 							variant={isGrid ? "card" : "compact"}
 							isRounded={isGrid ? false : undefined}
+							onPreview={() => onPreview(item)}
 						/>
 					</SelectableItem>
 				</MediaItemWithContextMenu>
