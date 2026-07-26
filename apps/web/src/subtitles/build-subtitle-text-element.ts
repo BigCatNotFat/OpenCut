@@ -314,7 +314,7 @@ export function buildSubtitleTextElement({
 
 	return {
 		...DEFAULTS.text.element,
-		name: `Caption ${index + 1}`,
+		name: `字幕 ${String(index + 1).padStart(3, "0")}`,
 		duration: mediaTimeFromSeconds({ seconds: caption.duration }),
 		startTime: mediaTimeFromSeconds({ seconds: caption.startTime }),
 		params: {

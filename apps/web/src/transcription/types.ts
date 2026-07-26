@@ -45,3 +45,28 @@ export interface CaptionChunk {
 	startTime: number;
 	duration: number;
 }
+
+export type SubtitleSegmentationPreset = "short" | "standard" | "long";
+
+export interface AlignedSubtitleWord {
+	text: string;
+	start: number;
+	end: number;
+}
+
+export interface GeneratedSubtitleCue {
+	id: string;
+	text: string;
+	start: number;
+	end: number;
+	wordStartIndex: number;
+	wordEndIndex: number;
+}
+
+export interface LocalSubtitleTranscriptionResult {
+	text: string;
+	language: string;
+	segmentationPreset: SubtitleSegmentationPreset;
+	words: AlignedSubtitleWord[];
+	cues: GeneratedSubtitleCue[];
+}

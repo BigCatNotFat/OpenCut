@@ -10,15 +10,21 @@ import type { SubtitleCue } from "./types";
 export function insertCaptionChunksAsTextTrack({
 	editor,
 	captions,
+	trackName = "自动字幕",
 }: {
 	editor: EditorCore;
 	captions: SubtitleCue[];
+	trackName?: string;
 }): string | null {
 	if (captions.length === 0) {
 		return null;
 	}
 
-	const addTrackCommand = new AddTrackCommand({ type: "text", index: 0 });
+	const addTrackCommand = new AddTrackCommand({
+		type: "text",
+		index: 0,
+		name: trackName,
+	});
 	const trackId = addTrackCommand.getTrackId();
 	const canvasSize = editor.project.getActive().settings.canvasSize;
 	const insertCommands = captions.map(

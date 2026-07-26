@@ -8,9 +8,13 @@ const path = require("path");
 const HOST = "127.0.0.1";
 const PORT = 3210;
 const APP_URL = `http://${HOST}:${PORT}`;
+const AI_BACKEND_URL = "http://127.0.0.1:7860";
+const AI_STATUS_URL = `${AI_BACKEND_URL}/api/status`;
 
 let mainWindow = null;
 let serverProcess = null;
+let aiBackendProcess = null;
+let aiBackendStartedByApp = false;
 let isQuitting = false;
 
 app.setName("OpenCut Classic");
@@ -39,6 +43,102 @@ function getOrCreateAuthSecret() {
   } catch {
     return crypto.randomBytes(48).toString("base64url");
   }
+}
+
+function findAiBackendDirectory() {
+  const candidates = [
+    process.env.OPENCUT_AI_HOME,
+    process.env.QWEN_ASR_HOME,
+    process.env.USERPROFILE
+      ? path.join(process.env.USERPROFILE, "Desktop", "codex", "ai-studio-web")
+      : null,
+    path.resolve(__dirname, "..", "ai-studio-web"),
+    app.isPackaged ? path.join(process.resourcesPath, "ai-studio-web") : null,
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    const pythonPath = path.join(candidate, ".venv", "Scripts", "python.exe");
+    const appPath = path.join(candidate, "app.py");
+    if (fs.existsSync(pythonPath) && fs.existsSync(appPath)) {
+      return path.resolve(candidate);
+    }
+  }
+  return null;
+}
+
+async function isAiBackendReady(timeoutMs = 2500) {
+  try {
+    const response = await fetch(AI_STATUS_URL, {
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!response.ok) return false;
+    const status = await response.json();
+    return Boolean(status?.capabilities?.subtitle_timestamps);
+  } catch {
+    return false;
+  }
+}
+
+async function waitForAiBackend(timeoutMs = 90000) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if (await isAiBackendReady(1500)) return true;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  return false;
+}
+
+async function ensureAiBackend() {
+  if (await isAiBackendReady()) {
+    appendLog(`Reusing compatible local AI backend at ${AI_BACKEND_URL}`);
+    return true;
+  }
+
+  const backendDirectory = findAiBackendDirectory();
+  if (!backendDirectory) {
+    appendLog("Local AI backend directory was not found; automatic captions remain unavailable.");
+    return false;
+  }
+
+  const pythonPath = path.join(backendDirectory, ".venv", "Scripts", "python.exe");
+  appendLog(`Starting local AI backend from ${backendDirectory}`);
+  aiBackendProcess = spawn(
+    pythonPath,
+    ["-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", "7860"],
+    {
+      cwd: backendDirectory,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        PYTHONUTF8: "1",
+      },
+    },
+  );
+  aiBackendStartedByApp = true;
+
+  aiBackendProcess.stdout.on("data", (data) =>
+    appendLog(`[AI] ${data.toString().trimEnd()}`),
+  );
+  aiBackendProcess.stderr.on("data", (data) =>
+    appendLog(`[AI] ${data.toString().trimEnd()}`),
+  );
+  aiBackendProcess.once("error", (error) =>
+    appendLog(`AI backend process error: ${error.stack || error}`),
+  );
+  aiBackendProcess.once("exit", (code, signal) => {
+    appendLog(`AI backend exited with code=${code} signal=${signal}`);
+    aiBackendProcess = null;
+    aiBackendStartedByApp = false;
+  });
+
+  const ready = await waitForAiBackend();
+  appendLog(
+    ready
+      ? "Local AI backend is ready for automatic captions."
+      : "Local AI backend did not become ready before timeout.",
+  );
+  return ready;
 }
 
 function startServer() {
@@ -187,6 +287,19 @@ function stopServer() {
   serverProcess = null;
 }
 
+function stopAiBackend() {
+  if (!aiBackendStartedByApp || !aiBackendProcess || aiBackendProcess.killed) return;
+
+  const pid = aiBackendProcess.pid;
+  if (process.platform === "win32" && pid) {
+    execFile("taskkill", ["/pid", String(pid), "/t", "/f"], () => {});
+  } else {
+    aiBackendProcess.kill("SIGTERM");
+  }
+  aiBackendProcess = null;
+  aiBackendStartedByApp = false;
+}
+
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
   app.quit();
@@ -203,6 +316,9 @@ if (!hasSingleInstanceLock) {
       startServer();
       await waitForServer();
       createWindow();
+      void ensureAiBackend().catch((error) =>
+        appendLog(`Unable to start local AI backend: ${error.stack || error}`),
+      );
     } catch (error) {
       appendLog(error.stack || String(error));
       dialog.showErrorBox(
@@ -217,6 +333,7 @@ if (!hasSingleInstanceLock) {
 app.on("before-quit", () => {
   isQuitting = true;
   stopServer();
+  stopAiBackend();
 });
 
 app.on("window-all-closed", () => app.quit());
